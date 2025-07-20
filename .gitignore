@@ -2,7 +2,7 @@
 node_modules/
 npm-debug.log
 .env # If you use environment variables
-
+node_modules/
 # Logs
 *.log
 logs/
