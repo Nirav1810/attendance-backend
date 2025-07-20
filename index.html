@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance System API Tester</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+    </style>
+</head>
+<body class="bg-gray-900">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        function App() {
+            const [classroomId, setClassroomId] = useState(null);
+            const [status, setStatus] = useState('Ready. Please set up the classroom first.');
+            const [isLoading, setIsLoading] = useState(false);
+            const [apiResult, setApiResult] = useState(null);
+            
+            const SERVER_URL = 'https://attendance-backend-api.onrender.com';
+
+            // Step 1: Setup the classroom
+            const handleSetupClassroom = async () => {
+                setIsLoading(true);
+                setStatus('Sending request to server to set up classroom...');
+                setApiResult(null);
+                try {
+                    const response = await fetch(`${SERVER_URL}/api/setup-classroom`, { method: 'POST' });
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        setClassroomId(data.classroomId);
+                        setStatus('Classroom is ready. You can now verify your location.');
+                        setApiResult({ success: true, message: data.message, data: `ID: ${data.classroomId}` });
+                    } else {
+                        throw new Error(data.message || 'Failed to setup classroom.');
+                    }
+                } catch (error) {
+                    setStatus(`Error: ${error.message}`);
+                    setApiResult({ success: false, message: error.message });
+                }
+                setIsLoading(false);
+            };
+
+            // Step 2: Get location and verify with the backend
+            const handleVerifyLocation = () => {
+                if (!classroomId) {
+                    setStatus('Please set up the classroom before verifying location.');
+                    return;
+                }
+                if (!navigator.geolocation) {
+                    setStatus('Geolocation is not supported by your browser.');
+                    return;
+                }
+
+                setIsLoading(true);
+                setStatus('Getting your location... Please approve browser permission.');
+                setApiResult(null);
+
+                navigator.geolocation.getCurrentPosition(
+                    async (position) => {
+                        const { latitude, longitude, accuracy } = position.coords;
+                        setStatus('Location found. Sending to server for verification...');
+                        
+                        try {
+                            const payload = { classroomId, latitude, longitude, accuracy };
+                            const response = await fetch(`${SERVER_URL}/api/check-attendance`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(payload)
+                            });
+                            const data = await response.json();
+
+                            if (response.ok) {
+                                setStatus('Verification complete!');
+                                setApiResult({ success: true, ...data });
+                            } else {
+                                throw new Error(data.message || 'Verification failed.');
+                            }
+                        } catch (error) {
+                             setStatus(`Error: ${error.message}`);
+                             setApiResult({ success: false, message: error.message });
+                        }
+                        setIsLoading(false);
+                    },
+                    (error) => {
+                        setStatus(`Error getting location: ${error.message}`);
+                        setApiResult({ success: false, message: `Geolocation Error: ${error.message}` });
+                        setIsLoading(false);
+                    },
+                    { enableHighAccuracy: true }
+                );
+            };
+
+            return (
+                <div className="min-h-screen flex flex-col items-center justify-center p-4">
+                    <div className="w-full max-w-lg bg-gray-800 rounded-2xl shadow-2xl p-6 md:p-8 space-y-6 text-white">
+                        <div className="text-center">
+                            <h1 className="text-3xl font-bold text-cyan-400">Full System Tester</h1>
+                            <p className="text-gray-400 mt-2">Frontend (React) {'<->'} Backend (Node.js)</p>
+                        </div>
+
+                        <div className="flex flex-col md:flex-row gap-4">
+                            <button onClick={handleSetupClassroom} disabled={isLoading} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition disabled:bg-gray-600">
+                                1. Setup Classroom
+                            </button>
+                            <button onClick={handleVerifyLocation} disabled={isLoading || !classroomId} className="flex-1 bg-teal-500 hover:bg-teal-600 text-white font-bold py-3 px-4 rounded-lg transition disabled:bg-gray-600 disabled:cursor-not-allowed">
+                                2. Verify My Location
+                            </button>
+                        </div>
+
+                        <div className="text-center bg-gray-700 p-4 rounded-lg">
+                            <p className="font-mono text-lg">{status}</p>
+                        </div>
+
+                        {apiResult && (
+                            <div className={`p-6 rounded-lg border ${apiResult.success ? 'border-green-500/50 bg-green-500/10' : 'border-red-500/50 bg-red-500/10'}`}>
+                                <h2 className={`text-xl font-semibold text-center ${apiResult.success ? 'text-green-400' : 'text-red-400'}`}>
+                                    Server Response
+                                </h2>
+                                <p className="text-center font-mono mt-2">{apiResult.message}</p>
+                                {apiResult.data && <p className="text-center font-mono text-sm text-gray-400 mt-1">{apiResult.data}</p>}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>
